@@ -1,0 +1,13 @@
+[package]
+name = "libtimeleft"
+version = "0.1.0"
+edition = "2021"
+description = "Library used for timeleft"
+
+[dependencies.chrono]
+version = "0.4.22"
+features = ["serde"]
+
+[dependencies.serde]
+version = "1.0.147"
+features = ["derive"]
