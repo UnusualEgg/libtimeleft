@@ -3,6 +3,7 @@ name = "libtimeleft"
 version = "0.1.0"
 edition = "2021"
 description = "Library used for timeleft"
+license = "Apache-2.0"
 
 [dependencies.chrono]
 version = "0.4.22"
