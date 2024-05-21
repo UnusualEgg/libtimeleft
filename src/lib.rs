@@ -88,12 +88,12 @@ use std::{cmp::Ordering, fmt};
 impl fmt::Display for PrintableTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.hours > 0 {
-            write!(f, "{}:", self.hours)?
+            write!(f, "{:0>2}:", self.hours)?
         }
         if self.minutes > 0 {
-            write!(f, "{}:", self.minutes)?
+            write!(f, "{:0>2}:", self.minutes)?
         }
-        write!(f, "{}", self.seconds)
+        write!(f, "{:0>2}", self.seconds)
     }
 }
 
