@@ -7,13 +7,6 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-enum LastDrawn {
-    Time,
-    Between,
-    Out,
-    None,
-}
 fn space_separated<'de, V, D>(deserializer: D) -> Result<V, D::Error>
 where
     V: FromIterator<Weekday>,
@@ -46,6 +39,7 @@ where
     let visitor = SpaceSeparated(PhantomData, PhantomData::<String>);
     deserializer.deserialize_str(visitor)
 }
+//This is deserialized from a CSV file then converted to ClassTime
 #[derive(Debug, Deserialize)]
 pub struct CSVTime {
     #[serde(deserialize_with = "space_separated")]
@@ -54,6 +48,7 @@ pub struct CSVTime {
     begin: String,
     end: String,
 }
+//exists to call NaiveTime::parse_from_str bc serde can't
 #[derive(Debug)]
 pub struct ClassTime {
     class: String,
@@ -71,7 +66,7 @@ impl From<CSVTime> for ClassTime {
         }
     }
 }
-
+//We use this bc we can't format Chrono::Duration with a custom format
 struct PrintableTime {
     hours: i64,
     minutes: i64,
@@ -89,15 +84,6 @@ impl PrintableTime {
         };
     }
 }
-fn add_zero(n: i64) -> String {
-    if n < 10 {
-        let mut s = n.to_string();
-        s.insert(0, '0');
-        return s;
-    } else {
-        return n.to_string();
-    }
-}
 use std::{cmp::Ordering, fmt};
 impl fmt::Display for PrintableTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -111,6 +97,7 @@ impl fmt::Display for PrintableTime {
     }
 }
 
+//used to check if we're before or after a class
 use chrono::{prelude::Local, Duration};
 #[derive(PartialEq)]
 enum RelPos {
@@ -121,10 +108,18 @@ enum RelPos {
 
 static CSVTIMES: Mutex<Vec<ClassTime>> = Mutex::new(Vec::new());
 static DRAWN_GLOBAL: Mutex<LastDrawn> = Mutex::new(LastDrawn::None);
+//used to check if we've already drawn the same thing
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum LastDrawn {
+    Time,   //time left(DrawType::In)
+    Before, //DrawType::Before
+    Out,    //DrawType::Out
+    None,   //haven't drawn yet
+}
 pub enum DrawType {
-    In,
-    Before,
-    Out,
+    In,     //in a class
+    Before, //right before a class
+    Out,    //out of classes for the day(RelPos::After for all)
 }
 pub type DrawFn = fn(
     draw_type: DrawType,
@@ -170,47 +165,44 @@ pub fn get_time_left(draw: &DrawFn) {
         } else {
             time_class_pos.push(match i.begin.cmp(&current_time) {
                 Ordering::Greater => RelPos::Before,
-                Ordering::Equal => RelPos::In,
+                Ordering::Equal => unreachable!(), //In
                 Ordering::Less => match i.end.cmp(&current_time) {
-                    Ordering::Greater | Ordering::Equal => RelPos::In,
+                    Ordering::Greater | Ordering::Equal => unreachable!(), //In
                     Ordering::Less => RelPos::After,
                 },
             });
         }
     } //loop thru each class
     if found_class == false {
-        //check if we before first class or after lass. then: we in between. else: we out of school
-        let first = time_class_pos.first();
-        let last = time_class_pos.last();
-        if ((first == Some(&RelPos::After)) || (first == Some(&RelPos::In)))
-            && ((last == Some(&RelPos::In)) || (last == Some(&RelPos::Before)))
-        {
-            if *drawn != LastDrawn::Between {
-                //TODO find which class is next
-                'classes: for i in 0..time_class_pos.len() {
-                    match time_class_pos[i] {
-                        RelPos::After => (),
-                        RelPos::Before => {
-                            let d = csvtimes_local[i].end.signed_duration_since(current_time);
-                            let p = PrintableTime::from_duration(d);
-
-                            let time_left = format!("{}", p);
-                            let current_time = current_time.format("%I:%M:%S %P").to_string();
-                            draw(
-                                DrawType::Before,
-                                *drawn != LastDrawn::Between,
-                                &csvtimes_local[i].class,
-                                &time_left,
-                                &current_time,
-                            );
-                            break 'classes;
-                        }
-                        RelPos::In => (),
-                    }
-                }
+        //none is RelPos::In
+        //find first one(its index) that is RelPos::Before
+        let mut first_before_i = None;
+        for (i, pos) in time_class_pos.iter().enumerate() {
+            if pos == &RelPos::Before {
+                first_before_i = Some(i);
+                break;
             }
-            *drawn = LastDrawn::Between;
+        }
+        //if the first class isn't before, then it's after
+        if let Some(first_before_i) = first_before_i {
+            if *drawn != LastDrawn::Before {
+                let first_before = &csvtimes_local[first_before_i];
+                let d = first_before.end.signed_duration_since(current_time);
+                let p = PrintableTime::from_duration(d);
+
+                let time_left = format!("{}", p);
+                let current_time = current_time.format("%I:%M:%S %P").to_string();
+                draw(
+                    DrawType::Before,
+                    *drawn != LastDrawn::Before,
+                    &first_before.class,
+                    &time_left,
+                    &current_time,
+                );
+            }
+            *drawn = LastDrawn::Before;
         } else if *drawn != LastDrawn::Out {
+            //we know we're out bc all are RelPoss:After bc we have searched for the first RelPos::In and RelPos::Before and failed
             if *drawn != LastDrawn::Out {
                 let current_time = current_time.format("%I:%M:%S %P").to_string();
                 draw(DrawType::Out, true, &EMPTY, &EMPTY, &current_time);
