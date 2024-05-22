@@ -74,9 +74,12 @@ struct PrintableTime {
 }
 impl PrintableTime {
     fn from_duration(d: Duration) -> Self {
-        let h = d.num_hours();
-        let m = d.num_minutes() - (60 * h);
-        let s = d.num_seconds() - (60 * m) - (60 * 60 * h);
+        let total_h = d.num_hours();
+        let total_m = d.num_minutes();
+        let total_s = d.num_seconds();
+        let h = total_h;
+        let m = total_m - (total_h * 60);
+        let s = total_s - (total_m * 60);
         return Self {
             hours: h,
             minutes: m,
