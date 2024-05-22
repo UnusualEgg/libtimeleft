@@ -76,7 +76,7 @@ impl PrintableTime {
     fn from_duration(d: Duration) -> Self {
         let h = d.num_hours();
         let m = d.num_minutes() - (60 * h);
-        let s = d.num_seconds() - (60 * m);
+        let s = d.num_seconds() - (60 * m) - (60 * 60 * h);
         return Self {
             hours: h,
             minutes: m,
